@@ -47,13 +47,17 @@ cat manual_testing_report.md
 ### Автоматизированное тестирование
 ```bash
 # 1. Установка зависимостей
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 
-# 2. Создание тестовых данных
-python automated_testing.py --create-sample
+# 2. Настройка подключения к серверу
+# Создайте SSH туннель (в отдельном терминале)
+ssh -L 8000:localhost:8000 root@your-server-ip
 
 # 3. Запуск автотестов
-python automated_testing.py --api-url http://your-bot-url:8000
+python3 automated_testing.py --api-url http://localhost:8000
+
+# Альтернативно: тестирование без API
+python3 automated_testing.py --create-sample
 
 # 4. Просмотр отчёта
 open test_report.html
