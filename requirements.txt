@@ -1,0 +1,40 @@
+# LLM Chat-bot Testing Framework
+# Зависимости для автоматизированного тестирования
+
+# Core testing framework
+requests>=2.31.0
+pandas>=2.0.0
+jinja2>=3.1.0
+
+# Data processing
+numpy>=1.24.0
+openpyxl>=3.1.0
+
+# HTML report generation  
+beautifulsoup4>=4.12.0
+plotly>=5.15.0
+
+# Testing utilities
+pytest>=7.4.0
+pytest-html>=3.2.0
+
+# API testing
+httpx>=0.24.0
+fastapi>=0.100.0  # для локального тестирования
+
+# Text processing
+regex>=2023.6.3
+fuzzywuzzy>=0.18.0
+python-levenshtein>=0.21.0
+
+# Logging and monitoring
+colorama>=0.4.6
+tqdm>=4.65.0
+
+# Configuration
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# Optional: for advanced analytics
+scikit-learn>=1.3.0
+matplotlib>=3.7.0

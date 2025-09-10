@@ -1,0 +1,6 @@
+category,question,expected,tolerance,priority
+facts,Сколько планет в Солнечной системе?,8,0,high
+math,Квадратный корень из 144?,12,0,high
+geography,Самая высокая гора в мире?,Эверест,0,medium
+tech,Что означает HTTP?,протокол передачи,0,medium
+history,В каком году полетел Гагарин?,1961,1,low
