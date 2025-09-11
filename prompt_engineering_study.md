@@ -239,19 +239,588 @@ NetworkExtension в iOS позволяет создавать VPN-приложе
 ### Ответы моделей на улучшенный промпт
 
 #### Claude Sonnet 4
-**Полный ответ:** [Детальное техническое руководство с архитектурными диаграммами, полным рабочим Swift кодом, API сигнатурами, entitlements и performance optimizations - ответ выше]
+**Полный ответ:**
+```
+# NetworkExtension для VPN: Техническое руководство для iOS разработчиков
+
+## 1. Архитектура NetworkExtension
+
+[Main App] ←→ [System Preferences] ←→ [NetworkExtension Provider]
+     ↓              ↓                           ↓
+[UI/Config]    [VPN Toggle]              [Packet Processing]
+     ↓              ↓                           ↓
+[NETunnelProvider- ←→ [iOS Network Stack] ←→ [Remote VPN Server]
+ Manager]
+     ↓
+[Shared App Group] ←→ [Extension Process]
+
+Ключевые компоненты:
+- Container App: UI, конфигурация, управление
+- Network Extension: Изолированный процесс обработки трафика
+- System Integration: Интеграция с Settings.app и Network Stack
+- Shared Container: Обмен данными между app и extension
+
+## 2. Типы провайдеров и различия
+
+### NEPacketTunnelProvider
+class NEPacketTunnelProvider: NEVPNProvider {
+    override func startTunnel(options: [String : NSObject]?, 
+                            completionHandler: @escaping (Error?) -> Void)
+    override func stopTunnel(with reason: NEProviderStopReason, 
+                           completionHandler: @escaping () -> Void)
+    override func handleAppMessage(_ messageData: Data, 
+                                 completionHandler: ((Data?) -> Void)?)
+}
+
+Использование: Custom VPN протоколы (OpenVPN, WireGuard, proprietary)
+Возможности: Полный контроль над пакетами, собственное шифрование
+
+### NEAppProxyProvider
+class NEAppProxyProvider: NEProvider {
+    override func startProxy(options: [String : Any]?, 
+                           completionHandler: @escaping (Error?) -> Void)
+    override func stopProxy(with reason: NEProviderStopReason, 
+                          completionHandler: @escaping () -> Void)
+}
+
+Использование: App-specific proxy, content filtering
+Возможности: Перехват на уровне приложений, HTTP/HTTPS proxy
+
+## 3. Жизненный цикл VPN приложения
+
+### Container App (ViewController.swift):
+import NetworkExtension
+
+class VPNViewController: UIViewController {
+    private let manager = NETunnelProviderManager()
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        loadVPNConfiguration()
+    }
+    
+    private func loadVPNConfiguration() {
+        NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
+            if let error = error {
+                print("Error loading: \(error)")
+                return
+            }
+            
+            if let manager = managers?.first {
+                self?.manager = manager
+            } else {
+                self?.createVPNConfiguration()
+            }
+        }
+    }
+    
+    private func createVPNConfiguration() {
+        let protocol = NETunnelProviderProtocol()
+        protocol.providerBundleIdentifier = "com.yourapp.vpnextension"
+        protocol.serverAddress = "your.vpn.server.com"
+        protocol.providerConfiguration = [
+            "server": "your.vpn.server.com",
+            "port": 443,
+            "protocol": "custom"
+        ]
+        
+        manager.protocolConfiguration = protocol
+        manager.localizedDescription = "Your VPN"
+        manager.isEnabled = true
+        
+        manager.saveToPreferences { [weak self] error in
+            if let error = error {
+                print("Save error: \(error)")
+            } else {
+                self?.manager.loadFromPreferences { _ in
+                    // Ready to connect
+                }
+            }
+        }
+    }
+}
+
+### Network Extension (PacketTunnelProvider.swift):
+import NetworkExtension
+import Network
+
+class PacketTunnelProvider: NEPacketTunnelProvider {
+    private var connection: NWConnection?
+    private var pendingStartCompletion: ((Error?) -> Void)?
+    
+    override func startTunnel(options: [String : NSObject]?, 
+                            completionHandler: @escaping (Error?) -> Void) {
+        
+        pendingStartCompletion = completionHandler
+        
+        guard let config = protocolConfiguration as? NETunnelProviderProtocol,
+              let serverAddress = config.serverAddress else {
+            completionHandler(VPNError.invalidConfiguration)
+            return
+        }
+        
+        let networkSettings = NEPacketTunnelNetworkSettings(
+            tunnelRemoteAddress: serverAddress
+        )
+        
+        let ipv4Settings = NEIPv4Settings(
+            addresses: ["10.0.0.2"],
+            subnetMasks: ["255.255.255.0"]
+        )
+        ipv4Settings.includedRoutes = [NEIPv4Route.default()]
+        networkSettings.ipv4Settings = ipv4Settings
+        
+        networkSettings.dnsSettings = NEDNSSettings(servers: ["8.8.8.8", "8.8.4.4"])
+        
+        setTunnelNetworkSettings(networkSettings) { [weak self] error in
+            if let error = error {
+                completionHandler(error)
+                return
+            }
+            
+            self?.establishVPNConnection(to: serverAddress, completion: completionHandler)
+        }
+    }
+    
+    private func establishVPNConnection(to server: String, 
+                                     completion: @escaping (Error?) -> Void) {
+        let endpoint = NWEndpoint.hostPort(
+            host: NWEndpoint.Host(server),
+            port: NWEndpoint.Port(443)!
+        )
+        
+        let parameters = NWParameters.tcp
+        connection = NWConnection(to: endpoint, using: parameters)
+        
+        connection?.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .ready:
+                self?.pendingStartCompletion?(nil)
+                self?.pendingStartCompletion = nil
+                self?.startPacketForwarding()
+            case .failed(let error):
+                self?.pendingStartCompletion?(error)
+                self?.pendingStartCompletion = nil
+            default:
+                break
+            }
+        }
+        
+        connection?.start(queue: .main)
+    }
+    
+    private func startPacketForwarding() {
+        packetFlow.readPackets { [weak self] packets, protocols in
+            guard let self = self else { return }
+            
+            for (index, packet) in packets.enumerated() {
+                self.processOutgoingPacket(packet, protocol: protocols[index])
+            }
+            
+            self.startPacketForwarding()
+        }
+    }
+    
+    override func stopTunnel(with reason: NEProviderStopReason, 
+                           completionHandler: @escaping () -> Void) {
+        connection?.cancel()
+        connection = nil
+        completionHandler()
+    }
+}
+
+## 4. Entitlements и сертификация
+
+Требуемые entitlements:
+<!-- App.entitlements -->
+<key>com.apple.security.application-groups</key>
+<array>
+    <string>group.com.yourapp.vpn</string>
+</array>
+
+<!-- Extension.entitlements -->
+<key>com.apple.developer.networking.networkextension</key>
+<array>
+    <string>packet-tunnel-provider</string>
+</array>
+
+Процесс получения от Apple:
+1. Developer Account: Paid developer program
+2. Request Form: Специальная форма для Network Extension
+3. Business Justification: Детальное обоснование необходимости
+4. Review Process: 2-4 недели рассмотрения
+5. Approval: Активация capability в developer portal
+
+## 5. Ограничения iOS sandbox
+
+Технические ограничения:
+- Memory limit: ~15MB для extension процесса
+- CPU time: Ограничения на background processing
+- File system: Доступ только к shared container
+- Network: Только через packet flow API
+
+## 6. Performance Considerations
+
+Best Practices:
+1. Efficient packet processing: Batch operations
+2. Memory management: Aggressive deallocation
+3. Error handling: Graceful degradation
+4. Connection resilience: Automatic reconnection
+5. User experience: Clear status indication
+
+Ключевой вывод: NetworkExtension предоставляет мощные возможности для создания enterprise-grade VPN решений, но требует глубокого понимания iOS networking stack и тщательной оптимизации производительности.
+```
 
 **Оценка:** Корректность: 5/5, Релевантность: 5/5, Полнота: 5/5, Ясность: 5/5
 **Средний балл:** 5.0/5
 
 #### Qwen3-Coder
-**Полный ответ:** [Исчерпывающий анализ с ASCII-диаграммами, полной реализацией VPN приложения, правильными entitlements, performance техниками - документ выше]
+**Полный ответ:**
+```
+NetworkExtension в iOS: Архитектура и Реализация VPN
+
+1. Архитектура NetworkExtension
+NetworkExtension Framework предоставляет систему изолированных компонентов:
+
+┌─────────────────────────────────────────────────────────────┐
+│                      Main App Process                       │
+│  ┌─────────────┐    ┌──────────────────┐    ┌─────────────┐ │
+│  │   UI/UX     │◄──►│  VPN Manager     │◄──►│ Preferences │ │
+│  └─────────────┘    └──────────────────┘    └─────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Network Extension Process                 │
+│  ┌──────────────────┐    ┌──────────────────┐              │
+│  │ Packet Tunnel    │◄──►│ System Network   │              │
+│  │ Provider         │    │ Stack            │              │
+│  └──────────────────┘    └──────────────────┘              │
+└─────────────────────────────────────────────────────────────┘
+
+2. Типы провайдеров
+
+NEPacketTunnelProvider:
+class CustomPacketTunnelProvider: NEPacketTunnelProvider {
+    override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        // Обработка входящих пакетов через packetFlow
+    }
+    
+    override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        // Очистка ресурсов
+    }
+}
+
+Преимущества: Полный контроль над сетевым трафиком, возможность модификации пакетов
+Ограничения: Требует Network Extension entitlement, более сложная реализация
+
+NEAppProxyProvider:
+class CustomAppProxyProvider: NEAppProxyProvider {
+    override func startProxy(options: [String : Any]?, completionHandler: @escaping (Error?) -> Void) {
+        // Проксирование на уровне приложений
+    }
+}
+
+3. Полный код примера VPN приложения
+
+Main App:
+import NetworkExtension
+
+class VPNService {
+    private var vpnManager: NEVPNManager
+    
+    init() {
+        self.vpnManager = NEVPNManager.shared()
+    }
+    
+    func setupVPNConfiguration(completion: @escaping (Bool) -> Void) {
+        vpnManager.loadFromPreferences { [weak self] error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                completion(false)
+                return
+            }
+            
+            let tunnelProtocol = self.createTunnelProtocol()
+            self.vpnManager.protocolConfiguration = tunnelProtocol
+            self.vpnManager.localizedDescription = "Secure VPN"
+            self.vpnManager.isEnabled = true
+            
+            self.vpnManager.saveToPreferences { saveError in
+                completion(saveError == nil)
+            }
+        }
+    }
+    
+    private func createTunnelProtocol() -> NETunnelProviderProtocol {
+        let protocolConfig = NETunnelProviderProtocol()
+        protocolConfig.providerBundleIdentifier = "com.yourapp.vpnextension"
+        protocolConfig.serverAddress = "your-vpn-server.com"
+        protocolConfig.username = "user@example.com"
+        
+        let configuration = ["server": "your-vpn-server.com"]
+        protocolConfig.providerConfiguration = configuration
+        
+        return protocolConfig
+    }
+    
+    func connect() {
+        do {
+            try vpnManager.connection.startVPNTunnel()
+        } catch {
+            print("Failed to start VPN tunnel: \(error)")
+        }
+    }
+}
+
+Packet Tunnel Provider:
+import NetworkExtension
+
+class PacketTunnelProvider: NEPacketTunnelProvider {
+    private var networkConnection: NWConnection?
+    
+    override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
+        guard let protocolConfiguration = protocolConfiguration as? NETunnelProviderProtocol,
+              let serverAddress = protocolConfiguration.serverAddress else {
+            completionHandler(NEVPNError(.configurationInvalid))
+            return
+        }
+        
+        setupNetworkConnection(to: serverAddress) { [weak self] error in
+            if let error = error {
+                completionHandler(error)
+                return
+            }
+            
+            let tunnelNetworkSettings = self?.createTunnelSettings()
+            self?.setTunnelNetworkSettings(tunnelNetworkSettings) { settingsError in
+                if let settingsError = settingsError {
+                    completionHandler(settingsError)
+                } else {
+                    self?.startPacketHandling()
+                    completionHandler(nil)
+                }
+            }
+        }
+    }
+    
+    private func createTunnelSettings() -> NEPacketTunnelNetworkSettings {
+        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "10.0.0.1")
+        
+        let ipv4Settings = NEIPv4Settings(addresses: ["10.0.0.2"], subnetMasks: ["255.255.255.0"])
+        ipv4Settings.includedRoutes = [NEIPv4Route.default()]
+        settings.ipv4Settings = ipv4Settings
+        
+        settings.dnsSettings = NEDNSSettings(servers: ["8.8.8.8", "8.8.4.4"])
+        
+        return settings
+    }
+    
+    private func startPacketHandling() {
+        packetFlow.readPacketObjects { [weak self] packets, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("Ошибка чтения пакетов: \(error)")
+                return
+            }
+            
+            self.handleIncomingPackets(packets)
+            self.startPacketHandling()
+        }
+    }
+    
+    override func stopTunnel(with reason: NEProviderStopReason, completionHandler: @escaping () -> Void) {
+        networkConnection?.cancel()
+        networkConnection = nil
+        completionHandler()
+    }
+}
+
+4. Entitlements и сертификация
+
+Требуемые entitlements:
+<key>com.apple.developer.networking.networkextension</key>
+<array>
+    <string>packet-tunnel-provider</string>
+</array>
+
+<key>com.apple.developer.networking.vpn.api</key>
+<array>
+    <string>allow-vpn</string>
+</array>
+
+Процесс получения:
+1. Запрос в Apple Developer Program
+2. Описание использования Network Extension
+3. Одобрение может занять 1-2 недели
+4. Требуется отдельный App ID с entitlements
+
+5. Ограничения iOS sandbox
+
+Основные ограничения:
+- Изолированный процесс для Network Extension
+- Ограниченный доступ к файловой системе
+- Нет доступа к пользовательским данным напрямую
+- Ограничения по использованию памяти
+
+6. Performance considerations и best practices
+
+Оптимизация производительности:
+// Использование batch обработки пакетов
+private func handlePacketsBatch(_ packets: [NEPacket]) {
+    let combinedData = packets.reduce(Data()) { $0 + $1.data }
+    networkConnection?.send(content: combinedData, completion: .idempotent)
+}
+
+// Эффективное управление памятью
+private func processPacketData(_ data: Data) {
+    autoreleasepool {
+        // Обработка данных
+    }
+}
+
+Best Practices:
+- Минимизация задержек - используйте асинхронную обработку
+- Эффективное использование памяти - избегайте утечек в Network Extension
+- Обработка ошибок - всегда реализуйте корректную обработку ошибок
+- Мониторинг состояния - отслеживайте состояние соединения
+- Безопасность - шифруйте чувствительные данные
+
+NetworkExtension предоставляет мощные возможности для создания VPN приложений, но требует тщательного планирования архитектуры и строгого соблюдения ограничений iOS sandbox.
+```
 
 **Оценка:** Корректность: 5/5, Релевантность: 5/5, Полнота: 5/5, Ясность: 5/5
 **Средний балл:** 5.0/5
 
 #### Gemini 1.5 Flash 8B
-**Полный ответ:** [Базовый анализ с техническими ошибками в API, неправильными методами, упрощенными диаграммами - документ выше]
+**Полный ответ:**
+```
+## NetworkExtension для создания VPN приложений на iOS
+
+NetworkExtension (NE) – мощный инструмент для создания VPN-приложений на iOS. Он позволяет вашим приложениям управлять сетевым трафиком, обходя ограничения iOS, и предоставляя гибкие возможности конфигурации.
+
+1. Архитектура NetworkExtension
+
++-----------------+ +-----------------+
+| iOS Kernel      | <--> | NetworkExtension |
++-----------------+ +-----------------+
+                   |                   ^
+                   |                   |
+                   | NEPacketTunnelProvider/
+                   | NEAppProxyProvider
+                   | (ваш код)
+                   v                   v
++-----------------+ +-----------------+
+| Ваше приложение | <--> | Your App     |
++-----------------+ +-----------------+
+
+iOS ядро отвечает за сетевые операции. NE выступает в роли посредника, предоставляя API для вашего приложения управлять трафиком.
+
+2. Типы провайдеров и их различия
+
+* NEPacketTunnelProvider: Преобразует сетевой трафик. Применяется для шифрования, туннелирования и модификации пакетов.
+* NEAppProxyProvider: Направляет сетевой трафик через ваш прокси. Лучше подходит для простых сценариев.
+
+3. Жизненный цикл VPN приложения
+
+1. Загрузка и регистрация: Приложение регистрирует свой провайдер
+2. Конфигурация: Пользователь настраивает параметры
+3. Установление соединения: Провайдер начинает работу
+4. Перехват трафика: NE перехватывает сетевой трафик
+5. Обработка пакетов: Провайдер обрабатывает пакеты
+6. Разрыв соединения: Приложение разрывает соединение
+
+4. Полный код примера (NEPacketTunnelProvider, Swift):
+
+import NetworkExtension
+
+class MyVPNProvider: NEPacketTunnelProvider {
+
+override func startTunnel(with options: [String : NSObject]?) throws {
+    // Настройка туннеля и соединение
+    
+    let tunnelInterface = try getTunnelInterface()
+    
+    guard let tunnelInterface = tunnelInterface else { 
+        throw NSError(domain: "com.example.tunnel", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to obtain tunnel interface"]) 
+    }
+
+    NotificationCenter.default.addObserver(self, selector: #selector(tunnelStateChanged(notification:)), name: .NEPacketTunnelProviderTunnelStateChanged, object: nil)
+}
+
+@objc func tunnelStateChanged(notification: Notification) {
+    guard let provider = notification.object as? NEPacketTunnelProvider else { return }
+    if provider.tunnelState == .running {
+        print("VPN connected")
+    }
+}
+
+override func stopTunnel() {
+    print("VPN disconnected")
+}
+
+override func packetTunnel(_ tunnel: NEPacketTunnel, didReceive data: Data, from remoteAddress: Data) -> Data? {
+    // Обработка полученных пакетов
+    return tunnel.sendData(data, to: remoteAddress)
+}
+
+func getTunnelInterface() throws -> NEPacketTunnelInterface? {
+    guard let interfaces = NEExtensionCenter.shared().packetTunnelInterfaces else { 
+        throw NSError(domain: "com.example.tunnel", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to get tunnel interfaces"]) 
+    }
+    return interfaces.first
+}
+
+}
+
+5. Entitlements и сертификация
+
+* Entitlements: Требуется Network.Extension entitlement
+* Сертификация: Требуется подпись кода приложения
+* Запреты: Вы не можете использовать методы, которые напрямую манипулируют системными файлами
+
+6. Ограничения iOS sandbox
+
+* Sandboxing: Вы ограничены в доступе к системным ресурсам
+* Ограничения на трафик: Важно следовать ограничениям iOS на трафик
+* Авторизация: Требуется авторизация пользователя для использования VPN
+
+7. Сравнение с альтернативными подходами
+
+* IPSec: Стандартный протокол VPN, но NetworkExtension предоставляет более удобный способ
+* Другие VPN библиотеки: Встречаются внешние библиотеки, но NE – интегрированное решение
+* Поддержка протоколов: NE поддерживает различные протоколы
+
+8. Performance Considerations и best practices
+
+* Асинхронная обработка: Используйте асинхронные операции для обработки пакетов
+* Кэширование: Кэширование данных может улучшить производительность
+* Выбор оптимальных алгоритмов: Подбирайте наилучшие алгоритмы шифрования
+* Мониторинг: Используйте инструменты для мониторинга использования ресурсов
+* Обработка ошибок: Регулярно проверяйте состояние и наличие ошибок
+
+Диаграмма процесса туннелирования:
+
++-----------------+
+| Клиентский      |
+| устройство      |
++-----------------+
+        | | |
+        | v |
++-----------------+
+| NE Packet       |
+| Tunnel Provider |
++-----------------+
+        | | |
+        | v |
++-----------------+
+| VPN Server      |
++-----------------+
+
+Этот гайд предоставляет основу для создания VPN-приложений с помощью NetworkExtension. Помните, что надёжность и безопасность – ключевые факторы для любого VPN приложения.
+```
 
 **Оценка:** Корректность: 2/5, Релевантность: 4/5, Полнота: 3/5, Ясность: 3/5
 **Средний балл:** 3.0/5
