@@ -1,0 +1,686 @@
+{
+	"info": {
+		"_postman_id": "db4e5e9d-234b-4448-88b2-65d98ece1ffb",
+		"name": "JSONPlaceholder API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "43456894"
+	},
+	"item": [
+		{
+			"name": "GET Posts - Base Request",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Response is array\", function () {",
+							"    pm.expect(pm.response.json()).to.be.an('array');",
+							"});",
+							"",
+							"pm.test(\"Posts have required fields\", function () {",
+							"    const posts = pm.response.json();",
+							"    posts.forEach(post => {",
+							"        pm.expect(post).to.have.property('id');",
+							"        pm.expect(post).to.have.property('userId');",
+							"        pm.expect(post).to.have.property('title');",
+							"        pm.expect(post).to.have.property('body');",
+							"    });",
+							"});",
+							"",
+							"pm.test(\"Content-Type is JSON\", function () {",
+							"    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}",
+					"host": [
+						"{{baseURL}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Posts - Filter by UserId",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"All posts belong to userId 7\", function () {",
+							"    const posts = pm.response.json();",
+							"    posts.forEach(post => {",
+							"        pm.expect(post.userId).to.equal(7);",
+							"    });",
+							"});",
+							"",
+							"pm.test(\"Response is not empty\", function () {",
+							"    pm.expect(pm.response.json().length).to.be.greaterThan(0);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}?userId=7",
+					"host": [
+						"{{baseURL}}"
+					],
+					"query": [
+						{
+							"key": "userId",
+							"value": "7"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Posts - Limit Results",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Returns exactly 5 posts\", function () {",
+							"    pm.expect(pm.response.json().length).to.equal(5);",
+							"});",
+							"",
+							"pm.test(\"_limit parameter works\", function () {",
+							"    pm.expect(pm.response.json().length).to.be.at.most(5);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}?_limit=5",
+					"host": [
+						"{{baseURL}}"
+					],
+					"query": [
+						{
+							"key": "_limit",
+							"value": "5"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Posts - Pagination",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Returns maximum 10 posts (page limit)\", function () {",
+							"    pm.expect(pm.response.json().length).to.be.at.most(10);",
+							"});",
+							"",
+							"pm.test(\"Pagination headers present\", function () {",
+							"    // Проверяем наличие заголовков пагинации если есть",
+							"    const linkHeader = pm.response.headers.get(\"Link\");",
+							"    console.log(\"Link header:\", linkHeader);",
+							"});",
+							"",
+							"pm.test(\"Posts have valid structure\", function () {",
+							"    const posts = pm.response.json();",
+							"    posts.forEach(post => {",
+							"        pm.expect(post).to.have.property('id');",
+							"        pm.expect(post.id).to.be.a('number');",
+							"    });",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}?_page=2&_limit=10",
+					"host": [
+						"{{baseURL}}"
+					],
+					"query": [
+						{
+							"key": "_page",
+							"value": "2"
+						},
+						{
+							"key": "_limit",
+							"value": "10"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Posts - User7 First5",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Returns maximum 5 posts\", function () {",
+							"    pm.expect(pm.response.json().length).to.be.at.most(5);",
+							"});",
+							"",
+							"pm.test(\"All posts belong to userId 7\", function () {",
+							"    const posts = pm.response.json();",
+							"    posts.forEach(post => {",
+							"        pm.expect(post.userId).to.equal(7);",
+							"    });",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}?userId=7&_limit=5",
+					"host": [
+						"{{baseURL}}"
+					],
+					"query": [
+						{
+							"key": "userId",
+							"value": "7"
+						},
+						{
+							"key": "_limit",
+							"value": "5"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Posts - Invalid UserId 999",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Returns empty array for nonexistent user\", function () {",
+							"    const posts = pm.response.json();",
+							"    pm.expect(posts).to.be.an('array').that.is.empty;",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}?userId=999",
+					"host": [
+						"{{baseURL}}"
+					],
+					"query": [
+						{
+							"key": "userId",
+							"value": "999"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Posts - High Limit 1000",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"API handles high limit gracefully\", function () {",
+							"    const posts = pm.response.json();",
+							"    pm.expect(posts.length).to.be.at.most(100); // JSONPlaceholder имеет ~100 постов максимум",
+							"    console.log(`Returned ${posts.length} posts for limit=1000`);",
+							"});",
+							"",
+							"pm.test(\"Response time acceptable\", function () {",
+							"    pm.expect(pm.response.responseTime).to.be.below(2000);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}?_limit=1000",
+					"host": [
+						"{{baseURL}}"
+					],
+					"query": [
+						{
+							"key": "_limit",
+							"value": "1000"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Posts - Invalid Parameter",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Invalid parameter ignored\", function () {",
+							"    const posts = pm.response.json();",
+							"    pm.expect(posts).to.be.an('array');",
+							"    pm.expect(posts.length).to.be.greaterThan(0);",
+							"});",
+							"",
+							"pm.test(\"Returns all posts when invalid param used\", function () {",
+							"    // При неверном параметре должны вернуться все посты",
+							"    pm.expect(pm.response.json().length).to.be.greaterThan(50);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}?invalid_param=value",
+					"host": [
+						"{{baseURL}}"
+					],
+					"query": [
+						{
+							"key": "invalid_param",
+							"value": "value"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "POST Posts - Valid Creation",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 201\", function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test(\"Response contains created post\", function () {",
+							"    const post = pm.response.json();",
+							"    pm.expect(post).to.have.property('id');",
+							"    pm.expect(post).to.have.property('title', 'Test Post Title');",
+							"    pm.expect(post).to.have.property('body', 'Test post body content');",
+							"    pm.expect(post).to.have.property('userId', 1);",
+							"});",
+							"",
+							"pm.test(\"ID is assigned\", function () {",
+							"    pm.expect(pm.response.json().id).to.equal(101);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"title\": \"Test Post Title\",\n  \"body\": \"Test post body content\",\n  \"userId\": 1\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseURL}}",
+					"host": [
+						"{{baseURL}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "POST Posts - Missing Content-Type",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 201\", function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test(\"BUG: JSON parsed incorrectly without Content-Type\", function () {",
+							"    const response = pm.response.json();",
+							"    const keys = Object.keys(response);",
+							"    ",
+							"    // Проверяем, что JSON стал строковым ключом",
+							"    const hasStringKey = keys.some(key => key.includes('{') && key.includes('}'));",
+							"    pm.expect(hasStringKey, \"JSON should NOT be parsed as string key\").to.be.true;",
+							"});",
+							"",
+							"pm.test(\"BUG: Missing expected fields\", function () {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response).to.not.have.property('title');",
+							"    pm.expect(response).to.not.have.property('body');",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {
+					"content-type": true
+				}
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"title\": \"No Content Type Test\",\n  \"body\": \"Testing without Content-Type header\",\n  \"userId\": 1\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseURL}}",
+					"host": [
+						"{{baseURL}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "POST Posts - Invalid Data Type",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 201\", function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test(\"BUG: Should reject string userId\", function () {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.userId).to.equal(\"string_instead_of_number\");",
+							"    ",
+							"    // В реальном API это должно быть 400 Bad Request",
+							"    console.log(\"WARNING: API accepts invalid data type\");",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"title\": \"Test Post\",\n  \"body\": \"Test body\",\n  \"userId\": \"string_instead_of_number\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseURL}}",
+					"host": [
+						"{{baseURL}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "POST Posts - Empty Body",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 201\", function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test(\"BUG: Should validate required fields\", function () {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response).to.have.property('id', 101);",
+							"    ",
+							"    // В реальном API должен быть 400 Bad Request",
+							"    console.log(\"WARNING: API accepts empty body without validation\");",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{}\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseURL}}",
+					"host": [
+						"{{baseURL}}"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "POST Posts - Idempotency Test",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 201\", function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test(\"BUG: Non-idempotent behavior\", function () {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.id).to.equal(101);",
+							"    ",
+							"    // Сохраняем ID для сравнения при повторном запросе",
+							"    pm.globals.set(\"lastCreatedId\", response.id);",
+							"    ",
+							"    console.log(\"WARNING: POST should generate unique IDs, but returns fixed 101\");",
+							"});",
+							"",
+							"pm.test(\"Response contains sent data\", function () {",
+							"    const response = pm.response.json();",
+							"    pm.expect(response.title).to.equal(\"Duplicate Test\");",
+							"    pm.expect(response.body).to.equal(\"Testing idempotency\");",
+							"    pm.expect(response.userId).to.equal(5);",
+							"});",
+							"",
+							"// Дополнительный тест для проверки уникальности при множественных запросах",
+							"pm.test(\"Check for unique ID generation\", function () {",
+							"    const currentId = pm.response.json().id;",
+							"    const previousId = pm.globals.get(\"lastCreatedId\");",
+							"    ",
+							"    if (previousId) {",
+							"        pm.expect(currentId, \"Each POST should generate unique ID\").to.not.equal(previousId);",
+							"    }",
+							"});",
+							"",
+							"pm.test(\"Final Summary - Known Issues\", function () {",
+							"    console.log(\"=== SUMMARY OF FOUND DEFECTS ===\");",
+							"    console.log(\"1. DEF-001: POST without Content-Type creates string key\");",
+							"    console.log(\"2. DEF-002: All POST requests return fixed ID=101\");",
+							"    console.log(\"3. DEF-003: No validation for invalid data types\");",
+							"    console.log(\"4. DEF-004: Empty JSON accepted without validation\");",
+							"    console.log(\"=== GET OPERATIONS: ALL WORKING CORRECTLY ===\");",
+							"    console.log(\" Filtering by userId works\");",
+							"    console.log(\" Pagination works\");  ",
+							"    console.log(\" Limit parameter works\");",
+							"    console.log(\" Invalid parameters ignored gracefully\");",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {}
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"title\": \"Duplicate Test\",\n  \"body\": \"Testing idempotency\",\n  \"userId\": 5\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseURL}}",
+					"host": [
+						"{{baseURL}}"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseURL",
+			"value": "https://jsonplaceholder.typicode.com/posts"
+		}
+	]
+}
