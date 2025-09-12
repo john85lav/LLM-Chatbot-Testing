@@ -13,7 +13,6 @@
 - **[Полный отчёт API тестирования](api-testing/jsonplaceholder-api/reports/full-test-report.md)** - детальные результаты тестирования всех эндпоинтов
 - **[Bug Report](api-testing/jsonplaceholder-api/reports/bug-report.md)** - формальная документация найденного критического дефекта
 - **[Postman Collection](api-testing/jsonplaceholder-api/postman/)** - 13 автоматизированных тестов с валидацией
-- **[Python скрипты](api-testing/jsonplaceholder-api/scripts/)** - автоматизация воспроизведения всех сценариев
 
 **Ключевые находки:**
 - Обнаружен критический дефект обработки Content-Type в POST запросах
