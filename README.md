@@ -1,4 +1,4 @@
-# LLM Chat-bot Testing Framework
+# Testing Framework
 
 Система ручного и автоматизированного тестирования чат-ботов на базе LLM (Large Language Models) и REST API.
 
