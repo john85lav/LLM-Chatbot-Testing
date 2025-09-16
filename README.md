@@ -43,6 +43,14 @@
 - **Qwen3-Coder:** 4.75 → 5.0 (+25% улучшение)
 - **Gemini 1.5 Flash 8B:** 3.25 → 3.0 (-25% ухудшение)
 
+- ### Real-World Application Testing
+**PulseVPN Manager v1.3** - Production macOS application
+- End-to-end testing of VPN management software
+- Network infrastructure testing (API endpoints, firewalls)
+- Data migration testing across application versions
+- **Results**: 4 critical bugs found and verified fixed
+- [View Testing Suite →](/PulseVPNManager/)
+
 ## Контакты
 
 Тестеровщик: **Евгений Лаврентьев**
